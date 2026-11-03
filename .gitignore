@@ -1,0 +1,21 @@
+# Config with secrets
+config/config.yaml
+.env
+
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Logs & data
+logs/
+data/*.db
+data/*.csv
+
+# IDE
+.idea/
+.vscode/
+*.swp

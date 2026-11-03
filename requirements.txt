@@ -1,0 +1,36 @@
+# Core
+ccxt>=4.4.0
+python-binance>=1.0.19
+aiohttp>=3.9.0
+websockets>=12.0
+asyncio-throttle>=1.0.2
+
+# Config & Utils
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Data & Storage
+aiosqlite>=0.19.0
+pandas>=2.1.0
+numpy>=1.26.0
+
+# Logging & Monitoring
+loguru>=0.7.2
+rich>=13.7.0
+
+# Alerts (optional)
+python-telegram-bot>=20.7
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+
+# Type hints
+typing-extensions>=4.9.0
+
+# Web Dashboard
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+jinja2>=3.1.3
