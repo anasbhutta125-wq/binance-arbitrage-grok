@@ -5,46 +5,36 @@
 
 exchange:
   name: binance
-  testnet: true                  # ALWAYS start with true
+  testnet: true
   api_key: "YOUR_API_KEY"
   api_secret: "YOUR_API_SECRET"
-  # Recommended permissions: Enable Reading + Enable Spot & Margin Trading + Enable Futures
-  # NEVER enable Withdrawals
 
 strategy:
-  # Symbols to trade (USDT-M perpetuals)
   symbols:
     - BTC/USDT:USDT
     - ETH/USDT:USDT
-    # Add more only after thorough testing
-
-  # Minimum annualized funding rate (after estimated fees) to enter
-  min_funding_apr: 0.25          # 25% APR
-
-  # Maximum acceptable basis (perp - spot) / spot as absolute value
-  max_basis_pct: 0.0015          # 0.15%
-
-  # Position sizing
-  position_size_usdt: 100        # Fixed notional per symbol (start very small)
-  max_total_exposure_usdt: 500   # Hard cap across all symbols
-  max_leverage: 2.0              # Futures leverage
-
-  # Entry / Exit
-  funding_lookback_hours: 8      # How many past fundings to average
-  exit_funding_apr: 0.08         # Exit when projected APR falls below this
-  rebalance_threshold_pct: 0.01  # Rebalance if delta drifts > 1%
-  min_hold_hours: 4              # Don't exit too quickly after entry
+  min_funding_apr: 0.25
+  max_basis_pct: 0.0015
+  position_size_usdt: 100
+  max_total_exposure_usdt: 500
+  max_leverage: 2.0
+  funding_lookback_hours: 8
+  exit_funding_apr: 0.08
+  rebalance_threshold_pct: 0.01
+  min_hold_hours: 4
+  round_trip_fee_pct: 0.0016
+  expected_hold_hours: 24
 
 risk:
   max_daily_loss_usdt: 30
-  max_drawdown_pct: 0.05         # 5% of allocated capital
-  liquidation_buffer_pct: 0.20   # Flatten if liquidation distance < 20%
+  max_drawdown_pct: 0.05
+  liquidation_buffer_pct: 0.20
   max_open_positions: 3
   emergency_flatten_on_error: true
 
 execution:
-  order_type: limit              # prefer limit, fallback to market
-  limit_offset_bps: 2            # place limit 2 bps better than mid
+  order_type: limit
+  limit_offset_bps: 2
   max_slippage_bps: 10
   post_only: true
   retry_attempts: 3
@@ -63,10 +53,10 @@ monitoring:
     chat_id: ""
   save_trades: true
   db_path: "data/trades.db"
-  dashboard_host: "0.0.0.0"    # 0.0.0.0 = accessible from network
+  dashboard_host: "0.0.0.0"
   dashboard_port: 8080
 
 runtime:
-  dry_run: true                  # CRITICAL: true = paper trading, no real orders
+  dry_run: true
   check_interval_sec: 10
   heartbeat_interval_sec: 60
