@@ -25,6 +25,8 @@ class StrategyConfig(BaseModel):
     exit_funding_apr: float = 0.08
     rebalance_threshold_pct: float = 0.01
     min_hold_hours: float = 4.0
+    round_trip_fee_pct: float = 0.0016
+    expected_hold_hours: float = 24.0
 
 
 class RiskConfig(BaseModel):

@@ -18,6 +18,25 @@ def annualized_funding(rate: float, interval_hours: float = 8.0) -> float:
     return rate * payments_per_year
 
 
+def net_apr_after_fees(
+    funding_rate: float,
+    interval_hours: float = 8.0,
+    round_trip_fee_pct: float = 0.0016,
+    expected_hold_hours: float = 24.0,
+    borrow_apr: float = 0.0,
+) -> float:
+    """
+    Estimate net annualized return after trading fees (and optional borrow cost).
+    """
+    gross_apr = annualized_funding(funding_rate, interval_hours)
+    if expected_hold_hours <= 0:
+        expected_hold_hours = 24.0
+    holds_per_year = (365 * 24) / expected_hold_hours
+    fee_drag_apr = round_trip_fee_pct * holds_per_year
+    net = gross_apr - fee_drag_apr - borrow_apr
+    return net
+
+
 def basis_pct(perp_price: float, spot_price: float) -> float:
     if spot_price <= 0:
         return 0.0
