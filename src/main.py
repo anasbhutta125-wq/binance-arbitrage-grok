@@ -17,6 +17,7 @@ from loguru import logger
 
 from src.utils.config import load_config
 from src.utils.logger import setup_logger
+from src.utils.persistence import PositionStore
 from src.data.exchange_client import ExchangeClient
 from src.data.market_data import MarketDataService
 from src.strategy.funding_arb import FundingArbStrategy
@@ -34,7 +35,10 @@ class FundingArbBot:
         self.market_data = MarketDataService(self.client, self.config)
         self.strategy = FundingArbStrategy(self.config, self.market_data)
         self.risk = RiskManager(self.config)
-        self.executor = Executor(self.client, self.market_data, self.strategy, self.risk, self.config)
+        self.store = PositionStore(self.config.monitoring.db_path)
+        self.executor = Executor(
+            self.client, self.market_data, self.strategy, self.risk, self.config, self.store
+        )
         self.alerts = AlertService(self.config)
 
         self._running = False
@@ -54,6 +58,14 @@ class FundingArbBot:
             await asyncio.sleep(3)
 
         await self.client.connect()
+        await self.store.connect()
+
+        saved = await self.store.load_all_positions()
+        if saved:
+            self.strategy.load_positions(saved)
+            logger.info(f"Restored {len(saved)} open positions from database")
+            await self.alerts.info(f"Restored {len(saved)} positions after restart")
+
         await self.market_data.start()
 
         self._running = True
@@ -91,6 +103,7 @@ class FundingArbBot:
         for t in self._tasks:
             t.cancel()
         await self.market_data.stop()
+        await self.store.close()
         await self.client.close()
         await self.alerts.info("Funding Arb Bot stopped")
         logger.info("Shutdown complete")
@@ -99,13 +112,45 @@ class FundingArbBot:
         interval = self.config.runtime.check_interval_sec
         while self._running:
             try:
+                if self.strategy.positions and not self.config.runtime.dry_run:
+                    danger = await self.risk.check_open_positions_liquidation(
+                        self.strategy.positions, self.client
+                    )
+                    for sym in danger:
+                        from src.strategy.funding_arb import Signal, SignalAction
+                        pos = self.strategy.get_position(sym)
+                        if pos:
+                            logger.critical(f"Auto-flattening {sym} due to liquidation risk")
+                            await self.alerts.critical(f"LIQ DANGER – flattening {sym}")
+                            sig = Signal(
+                                symbol=sym,
+                                action=SignalAction.EXIT,
+                                side=pos.side,
+                                reason="liquidation buffer breached",
+                            )
+                            await self.executor.process_signal(sig)
+
                 signals = self.strategy.generate_signals()
                 for sig in signals:
                     logger.info(f"Signal: {sig.symbol} | {sig.action.value} | {sig.reason}")
                     await self.executor.process_signal(sig)
+
+                try:
+                    bal = await self.client.fetch_balance("future")
+                    equity = float(
+                        bal.get("USDT", {}).get("total")
+                        or bal.get("total", {}).get("USDT")
+                        or 0
+                    )
+                    if equity > 0:
+                        self.risk.update_equity(equity)
+                except Exception:
+                    pass
+
             except Exception as e:
                 logger.exception(f"Main loop error: {e}")
                 await self.alerts.critical(f"Main loop error: {e}")
+
             await asyncio.sleep(interval)
 
     async def _heartbeat_loop(self) -> None:
@@ -113,18 +158,28 @@ class FundingArbBot:
         while self._running:
             open_pos = len(self.strategy.positions)
             snaps = self.market_data.all_snapshots()
-            logger.info(f"Heartbeat | open positions={open_pos} | tracked symbols={len(snaps)} | dry_run={self.config.runtime.dry_run}")
+            logger.info(
+                f"Heartbeat | open positions={open_pos} | "
+                f"tracked symbols={len(snaps)} | dry_run={self.config.runtime.dry_run}"
+            )
             await asyncio.sleep(interval)
 
 
 async def main():
     bot = FundingArbBot()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(bot.stop()))
+
+    # Signal handlers work on Unix only; Windows does not support them
+    if sys.platform != "win32":
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, lambda: asyncio.create_task(bot.stop()))
+            except NotImplementedError:
+                pass
+
     try:
         await bot.start()
-    except asyncio.CancelledError:
+    except (asyncio.CancelledError, KeyboardInterrupt):
         pass
     finally:
         await bot.stop()
