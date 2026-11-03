@@ -26,7 +26,7 @@ binance_funding_arb/
 │   ├── execution/
 │   │   └── executor.py         # Order placement & position mgmt
 │   ├── risk/
-│   │   └── risk_manager.py     # Circuit breakers
+│   │   └── risk_manager.py     # Circuit breakers + live liq check
 │   ├── monitoring/
 │   │   └── alerts.py           # Telegram (optional)
 │   ├── web/
@@ -36,7 +36,8 @@ binance_funding_arb/
 │   ├── utils/
 │   │   ├── config.py
 │   │   ├── logger.py
-│   │   └── helpers.py
+│   │   ├── helpers.py
+│   │   └── persistence.py      # SQLite position store
 │   └── main.py                 # Entry point
 ├── logs/
 ├── data/
@@ -52,7 +53,7 @@ binance_funding_arb/
 ```bash
 cd binance_funding_arb
 python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -64,10 +65,10 @@ cp .env.example .env
 ```
 
 Edit `config/config.yaml`:
-- Put your Binance API key & secret (create keys with **read + trade** only, **no withdrawal**)
-- Keep `testnet: true` and `dry_run: true` until you are 100% confident
+- Put your Binance API key & secret (Read + Trade only, **no withdrawal**)
+- Keep `testnet: true` and `dry_run: true` until confident
 - Adjust symbols, position size, min funding APR, risk limits
-- Dashboard runs on port **8080** by default (`monitoring.dashboard_port`)
+- Dashboard on port **8080** by default
 
 ### 3. Run (paper / dry-run)
 
@@ -75,63 +76,44 @@ Edit `config/config.yaml`:
 python -m src.main
 ```
 
-Then open the live dashboard in your browser:
+Open dashboard: **http://localhost:8080**
 
-```
-http://localhost:8080
-```
+### 4. Testnet then Mainnet
 
-The dashboard auto-refreshes every 5 seconds and shows:
-- Bot status (Running / Dry-Run / Testnet / Mainnet)
-- Open positions & size
-- Live funding rates + projected APR
-- Basis, mark vs spot prices
-- Risk status & daily PnL
-
-### 4. Move to Testnet live orders
-
-1. Set `dry_run: false`
-2. Keep `testnet: true`
-3. Fund your Binance Futures Testnet account
-4. Run again and monitor closely
-
-### 5. Mainnet (only after extensive testing)
-
-1. Set `testnet: false`
-2. Start with **very small** `position_size_usdt`
-3. Monitor 24/7 for the first days
+1. `dry_run: false`, keep `testnet: true`
+2. Small size, monitor closely
+3. Only then mainnet with tiny capital
 
 ## Safety Features
 
 - Dry-run mode (no real orders)
 - Testnet support
-- Daily loss limit
-- Max drawdown circuit breaker
-- Liquidation distance monitoring
-- Max open positions
-- Configurable min funding APR filter
-- Basis filter (avoid wide basis)
+- Daily loss limit + max drawdown circuit breaker
+- **Live liquidation distance monitoring** + auto-flatten
+- Max open positions + max total exposure
+- Net APR after fees (not raw funding)
+- Delta rebalancing when hedge drifts
+- State persistence (survives restart)
+- Dynamic position sizing by funding strength
+- Basis filter + min hold time
 - Structured logging + optional Telegram alerts
+- Live web dashboard
+
+## Security Best Practices
+
+1. API keys: **Read + Spot Trade + Futures only**. Never enable Withdrawals.
+2. Enable **IP whitelist** on the Binance API key.
+3. Prefer a **dedicated sub-account** for the bot.
+4. Keep keys in `config.yaml` or `.env` — never commit them.
+5. Start with `dry_run: true` + `testnet: true`.
+6. Start with very small `position_size_usdt`.
 
 ## Important Warnings
 
-- **This is not financial advice.** Crypto trading involves substantial risk of loss.
-- Funding rates can flip rapidly. You can end up paying funding instead of receiving it.
-- You still face basis risk, liquidation risk, exchange risk, and operational risk.
-- Start extremely small. Never risk money you cannot afford to lose.
-- The negative-funding path (short spot) requires margin account and borrowing – implement and test carefully.
-- Keep API keys secure. Never enable withdrawal permissions.
-- Past performance of the strategy does not guarantee future results.
-
-## Next Improvements (recommended)
-
-- [ ] Full delta tracking & automatic rebalancing
-- [ ] Historical funding backtester
-- [ ] Web dashboard (FastAPI + simple frontend)
-- [ ] Multi-exchange support
-- [ ] Better short-spot / margin handling
-- [ ] Funding rate prediction model
-- [ ] Portfolio-level risk (correlation, concentration)
+- This is not financial advice. Crypto trading involves substantial risk of loss.
+- Funding rates can flip. You can end up paying funding.
+- Basis risk, liquidation risk, exchange risk remain.
+- Never risk money you cannot afford to lose.
 
 ## License
 
