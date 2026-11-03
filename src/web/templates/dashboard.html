@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Funding Arb Dashboard</title>
+  <style>
+    :root { --bg:#0f1117; --card:#1a1d27; --border:#2a2e3b; --text:#e6e8ef; --muted:#8b90a0; --green:#22c55e; --red:#ef4444; --yellow:#eab308; --blue:#3b82f6; --accent:#8b5cf6; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; padding:1.5rem; min-height:100vh; }
+    h1 { font-size:1.5rem; font-weight:600; margin-bottom:0.25rem; }
+    .subtitle { color:var(--muted); font-size:0.875rem; margin-bottom:1.5rem; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.25rem; }
+    .card h2 { font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin-bottom:0.75rem; }
+    .stat { font-size:1.75rem; font-weight:700; }
+    .stat.small { font-size:1.25rem; }
+    .badge { display:inline-block; padding:0.2rem 0.6rem; border-radius:999px; font-size:0.75rem; font-weight:600; }
+    .badge.green { background:rgba(34,197,94,0.15); color:var(--green); }
+    .badge.red { background:rgba(239,68,68,0.15); color:var(--red); }
+    .badge.yellow { background:rgba(234,179,8,0.15); color:var(--yellow); }
+    .badge.blue { background:rgba(59,130,246,0.15); color:var(--blue); }
+    table { width:100%; border-collapse:collapse; font-size:0.875rem; }
+    th { text-align:left; color:var(--muted); font-weight:500; padding:0.5rem 0.75rem; border-bottom:1px solid var(--border); }
+    td { padding:0.65rem 0.75rem; border-bottom:1px solid var(--border); }
+    .positive { color:var(--green); } .negative { color:var(--red); } .muted { color:var(--muted); }
+    .header-row { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem; }
+    .status-pills { display:flex; gap:0.5rem; flex-wrap:wrap; }
+    .refresh-info { font-size:0.75rem; color:var(--muted); margin-top:1rem; text-align:right; }
+    .empty { color:var(--muted); font-style:italic; padding:1rem 0; }
+  </style>
+</head>
+<body>
+  <div class="header-row">
+    <div>
+      <h1>Funding Rate Arbitrage</h1>
+      <p class="subtitle">Binance Spot + USDT-M Perpetual · Live Monitor</p>
+    </div>
+    <div class="status-pills" id="status-pills"><span class="badge yellow">Loading…</span></div>
+  </div>
+  <div class="grid" id="summary-cards">
+    <div class="card"><h2>Open Positions</h2><div class="stat" id="open-pos">–</div></div>
+    <div class="card"><h2>Daily PnL</h2><div class="stat small" id="daily-pnl">–</div></div>
+    <div class="card"><h2>Risk Status</h2><div class="stat small" id="risk-status">–</div></div>
+    <div class="card"><h2>Mode</h2><div class="stat small" id="mode">–</div></div>
+  </div>
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2>Market Snapshot</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Symbol</th><th>Funding Rate</th><th>Projected APR</th><th>Basis</th><th>Mark</th><th>Spot</th><th>Next Funding</th></tr></thead>
+        <tbody id="market-body"><tr><td colspan="7" class="empty">Waiting for data…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Open Positions</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Symbol</th><th>Side</th><th>Size (USDT)</th><th>Entry Funding</th><th>Hold Time</th><th>Realized Funding</th></tr></thead>
+        <tbody id="positions-body"><tr><td colspan="6" class="empty">No open positions</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <p class="refresh-info">Auto-refreshes every 5 seconds · <span id="last-update">–</span></p>
+  <script>
+    function fmt(n, d=2){ if(n==null||isNaN(n)) return "–"; return Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
+    async function refresh(){
+      try{
+        const res = await fetch("/api/summary");
+        const data = await res.json();
+        const s = data.status||{};
+        const pills = document.getElementById("status-pills");
+        pills.innerHTML = "";
+        pills.innerHTML += s.running ? '<span class="badge green">Running</span>' : '<span class="badge red">Stopped</span>';
+        pills.innerHTML += s.dry_run ? '<span class="badge yellow">Dry-Run</span>' : '<span class="badge red">LIVE</span>';
+        pills.innerHTML += s.testnet ? '<span class="badge blue">Testnet</span>' : '<span class="badge purple">Mainnet</span>';
+        const risk = data.risk||{};
+        document.getElementById("open-pos").textContent = `${risk.open_positions||0} / ${risk.max_open_positions||"–"}`;
+        const pnl = risk.daily_pnl||0;
+        const pnlEl = document.getElementById("daily-pnl");
+        pnlEl.textContent = (pnl>=0?"+":"")+fmt(pnl)+" USDT";
+        pnlEl.className = "stat small "+(pnl>=0?"positive":"negative");
+        document.getElementById("risk-status").innerHTML = risk.halted ? '<span class="badge red">HALTED</span>' : (risk.can_trade ? '<span class="badge green">OK</span>' : '<span class="badge yellow">Blocked</span>');
+        document.getElementById("mode").textContent = (s.dry_run?"Paper":"Live")+(s.testnet?" · Testnet":" · Mainnet");
+        const marketBody = document.getElementById("market-body");
+        const market = data.market||[];
+        if(!market.length) marketBody.innerHTML = '<tr><td colspan="7" class="empty">No market data yet</td></tr>';
+        else marketBody.innerHTML = market.map(m=>`<tr><td><strong>${m.symbol}</strong></td><td class="${m.funding_rate>=0?"positive":"negative"}">${(m.funding_rate*100).toFixed(4)}%</td><td><strong>${fmt(m.projected_apr,1)}%</strong></td><td>${fmt(m.basis_pct,3)}%</td><td>${fmt(m.mark_price,2)}</td><td>${fmt(m.spot_price,2)}</td><td class="muted">${m.next_funding_time?new Date(m.next_funding_time).toLocaleTimeString():"–"}</td></tr>`).join("");
+        const posBody = document.getElementById("positions-body");
+        const positions = data.positions||[];
+        if(!positions.length) posBody.innerHTML = '<tr><td colspan="6" class="empty">No open positions</td></tr>';
+        else posBody.innerHTML = positions.map(p=>`<tr><td><strong>${p.symbol}</strong></td><td><span class="badge ${p.side.includes("long_spot")?"green":"blue"}">${p.side.replaceAll("_"," ")}</span></td><td>${fmt(p.size_usdt)}</td><td>${(p.entry_funding_rate*100).toFixed(4)}%</td><td>${fmt(p.hold_hours,1)} h</td><td class="${p.realized_funding>=0?"positive":"negative"}">${fmt(p.realized_funding,4)}</td></tr>`).join("");
+        document.getElementById("last-update").textContent = new Date().toLocaleTimeString();
+      }catch(err){ console.error(err); document.getElementById("status-pills").innerHTML = '<span class="badge red">Connection error</span>'; }
+    }
+    refresh(); setInterval(refresh, 5000);
+  </script>
+</body>
+</html>
